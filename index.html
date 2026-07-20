@@ -210,6 +210,7 @@
   .ov-like .cnt { font-size: 11px; }
   @media (max-width: 640px) { .overlay-media video { object-fit: cover; } }
   @media (max-width: 640px) { .overlay-nav { display: none; } }
+  .pause-badge { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 64px; height: 64px; border-radius: 50%; background: rgba(0,0,0,0.5); color: #fff; display: none; align-items: center; justify-content: center; font-size: 26px; padding-left: 6px; pointer-events: none; z-index: 2; }
   .empty {
     text-align: center;
     color: var(--muted);
@@ -320,7 +321,7 @@
       var hls = new Hls();
       hls.loadSource(src);
       hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, function() { video.play(); });
+      hls.on(Hls.Events.MANIFEST_PARSED, function() { video.play().catch(function() {}); });
     } else {
       video.src = src;
       video.play();
@@ -358,6 +359,20 @@
     HERO = vids.concat(phs);
   }
 
+  // Крупный ▶ по центру, когда видео стоит на паузе (остановлено пользователем
+  // или автозапуск заблокирован браузером) — понятно, что оно не играет.
+  function attachPauseBadge(container, video) {
+    var badge = document.createElement('div');
+    badge.className = 'pause-badge';
+    badge.textContent = '▶';
+    container.appendChild(badge);
+    function upd() { badge.style.display = video.paused ? 'flex' : 'none'; }
+    video.addEventListener('pause', upd);
+    video.addEventListener('play', upd);
+    video.addEventListener('playing', upd);
+    upd();
+  }
+
   function renderHero(autoplay) {
     var box = document.getElementById('heroMedia');
     if (!HERO.length || !box) return;
@@ -372,12 +387,14 @@
       var poster = r.videoPreview || (r.photos && r.photos[0]) || '';
       if (poster) video.poster = poster;
       box.appendChild(video);
+      attachPauseBadge(box, video);
       var hlsOk = (typeof Hls !== 'undefined') && Hls.isSupported();
       if (hlsOk) {
         heroHls = new Hls();
         heroHls.loadSource(r.video);
         heroHls.attachMedia(video);
-        if (autoplay) heroHls.on(Hls.Events.MANIFEST_PARSED, function() { video.play(); });
+        if (autoplay) heroHls.on(Hls.Events.MANIFEST_PARSED, function() { video.play().catch(function() {}); });
+        if (autoplay) video.addEventListener('canplay', function() { if (video.paused && !video._userPaused) video.play().catch(function() {}); });
       } else if (canNativeHls) {
         video.src = r.video;
         if (autoplay) video.play();
@@ -419,17 +436,22 @@
       var poster = r.videoPreview || (r.photos && r.photos[0]) || '';
       if (poster) video.poster = poster;
       box.appendChild(video);
+      attachPauseBadge(box, video);
       var hlsOk = (typeof Hls !== 'undefined') && Hls.isSupported();
       if (hlsOk) {
         ovHls = new Hls();
         ovHls.loadSource(r.video);
         ovHls.attachMedia(video);
-        ovHls.on(Hls.Events.MANIFEST_PARSED, function() { video.play(); });
+        ovHls.on(Hls.Events.MANIFEST_PARSED, function() { video.play().catch(function() {}); });
+        video.addEventListener('canplay', function() { if (video.paused && !video._userPaused) video.play().catch(function() {}); });
       } else if (canNativeHls) {
         video.src = r.video;
         video.play();
       }
-      video.addEventListener('click', function() { if (video.paused) video.play(); else video.pause(); });
+      video.addEventListener('click', function() {
+        if (video.paused) { video._userPaused = false; video.play().catch(function() {}); }
+        else { video._userPaused = true; video.pause(); }
+      });
     } else if (r.photos && r.photos.length) {
       var img = document.createElement('img');
       img.src = r.photos[0];
