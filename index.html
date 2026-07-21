@@ -721,9 +721,9 @@
   // при ошибке загрузки — фолбэк на фото из отзыва), клик — фильтр по артикулу.
   var ART_FILTER = null;
 
-  function wbCardImg(nm) {
-    var vol = Math.floor(nm / 100000);
-    var part = Math.floor(nm / 1000);
+  var WB_HOST_CACHE = {}; // vol -> хост, реально отдавший фото (на сессию; полоса пересобирается при фильтрах)
+
+  function wbHostTable_(vol) {
     var h;
     if (vol <= 143) h = '01';
     else if (vol <= 287) h = '02';
@@ -754,7 +754,29 @@
       var n = 26 + Math.floor((vol - 4566) / 312);
       h = (n < 10 ? '0' : '') + n;
     }
-    return 'https://basket-' + h + '.wbbasket.ru/vol' + vol + '/part' + part + '/' + nm + '/images/c246x328/1.webp';
+    return h;
+  }
+
+  // Список URL-кандидатов фото карточки: диапазоны новых бакетов WB шире 312 vol и растут,
+  // поэтому расчёт даёт ВЕРХНЮЮ оценку — реальный хост на 0-5 ниже (проверено на живых nmId).
+  // Перебираем вниз через onerror, найденный хост кэшируем по vol.
+  function wbImgCandidates(nm) {
+    var vol = Math.floor(nm / 100000);
+    var part = Math.floor(nm / 1000);
+    var hosts = [];
+    if (WB_HOST_CACHE[vol]) hosts.push(WB_HOST_CACHE[vol]);
+    var base = wbHostTable_(vol);
+    hosts.push(base);
+    if (vol > 4565) {
+      var n = Number(base);
+      for (var d = 1; d <= 5; d++) if (n - d >= 26) hosts.push((n - d < 10 ? '0' : '') + (n - d));
+      hosts.push((n + 1 < 10 ? '0' : '') + (n + 1));
+    }
+    var seen = {}, out = [];
+    hosts.forEach(function(h) { if (!seen[h]) { seen[h] = true; out.push(h); } });
+    return out.map(function(h) {
+      return 'https://basket-' + h + '.wbbasket.ru/vol' + vol + '/part' + part + '/' + nm + '/images/c246x328/1.webp';
+    });
   }
 
   function buildProdStrip() {
@@ -772,13 +794,29 @@
       .slice(0, 40);
     var strip = document.getElementById('prodStrip');
     strip.innerHTML = arts.map(function(a) {
-      var src = a.nm ? wbCardImg(a.nm) : a.img;
-      return '<div class="prod-chip" data-art="' + a.art + '"><img loading="lazy" src="' + src + '" data-fb="' + a.img + '" alt=""><div class="cap">' + a.art + '</div></div>';
+      var src = a.nm ? wbImgCandidates(a.nm)[0] : a.img;
+      return '<div class="prod-chip" data-art="' + a.art + '"><img loading="lazy" src="' + src + '" data-nm="' + (a.nm || '') + '" data-hidx="0" data-fb="' + a.img + '" alt=""><div class="cap">' + a.art + '</div></div>';
     }).join('');
     Array.prototype.forEach.call(strip.querySelectorAll('img'), function(im) {
       im.addEventListener('error', function() {
+        var nm = Number(im.getAttribute('data-nm') || 0);
+        if (nm) {
+          var idx = Number(im.getAttribute('data-hidx') || 0) + 1;
+          var cands = wbImgCandidates(nm);
+          if (idx < cands.length) {
+            im.setAttribute('data-hidx', String(idx));
+            im.src = cands[idx];
+            return;
+          }
+        }
         var fb = im.getAttribute('data-fb');
         if (fb && im.src !== fb) im.src = fb;
+      });
+      im.addEventListener('load', function() {
+        var nm = Number(im.getAttribute('data-nm') || 0);
+        if (!nm) return;
+        var m = im.src.match(/basket-(\d+)\.wbbasket/);
+        if (m) WB_HOST_CACHE[Math.floor(nm / 100000)] = m[1];
       });
     });
     strip.addEventListener('click', function(e) {
