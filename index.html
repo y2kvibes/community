@@ -210,7 +210,12 @@
   .ov-like .cnt { font-size: 11px; }
   @media (max-width: 640px) { .overlay-media video { object-fit: cover; } }
   @media (max-width: 640px) { .overlay-nav { display: none; } }
+  @media (max-height: 420px) { .overlay-nav { display: none; } }
   .pause-badge { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 64px; height: 64px; border-radius: 50%; background: rgba(0,0,0,0.5); color: #fff; display: none; align-items: center; justify-content: center; font-size: 26px; padding-left: 6px; pointer-events: none; z-index: 2; }
+  .mute-btn { position: absolute; left: 10px; bottom: 10px; z-index: 3; width: 38px; height: 38px; border-radius: 50%; background: rgba(0,0,0,0.45); color: #fff; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .mute-btn:hover { background: rgba(0,0,0,0.7); }
+  .overlay .mute-btn { left: auto; right: 16px; bottom: 88px; width: 54px; height: 54px; background: rgba(255,255,255,0.15); }
+  .overlay .mute-btn:hover { background: rgba(255,255,255,0.3); }
   .empty {
     text-align: center;
     color: var(--muted);
@@ -304,6 +309,85 @@
 
   var canNativeHls = document.createElement('video').canPlayType('application/vnd.apple.mpegurl');
 
+  // Звук в автовоспроизведении, как в шортсах: SOUND_ON — желаемое состояние (запоминается).
+  // Без жеста браузер звук блокирует — тогда tryPlay тихо падает на muted, а после первого
+  // клика/свайпа следующие видео уже играют со звуком.
+  var SOUND_ON = (function() { try { return localStorage.getItem('y2kv_sound') !== '0'; } catch (e) { return true; } })();
+  var ICON_SND_ON = '<svg width="20" height="20" viewBox="0 0 24 24"><path d="M3 9v6h4l5 4V5L7 9H3z" fill="#fff"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a9 9 0 0 1 0 12" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>';
+  var ICON_SND_OFF = '<svg width="20" height="20" viewBox="0 0 24 24"><path d="M3 9v6h4l5 4V5L7 9H3z" fill="#fff"/><path d="M16 9.5l5 5M21 9.5l-5 5" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>';
+
+  // Иконка показывает ФАКТИЧЕСКОЕ состояние текущего видео (не желаемое): если звук
+  // заблокирован политикой браузера, пользователь видит перечёркнутый динамик.
+  function updateSoundBtns() {
+    document.querySelectorAll('.mute-btn').forEach(function(b) {
+      var v = b.parentNode ? b.parentNode.querySelector('video') : null;
+      var on = v ? !v.muted : SOUND_ON;
+      b.innerHTML = on ? ICON_SND_ON : ICON_SND_OFF;
+    });
+  }
+
+  function overlayOpen() {
+    return document.getElementById('overlay').classList.contains('open');
+  }
+
+  // Видео активного контекста: оверлей открыт — его видео, иначе видео карусели.
+  function activeVideo() {
+    return document.querySelector(overlayOpen() ? '#ovMedia video' : '#heroMedia video');
+  }
+
+  function toggleSound(e) {
+    e.stopPropagation();
+    var v = activeVideo();
+    // Отталкиваемся от ФАКТИЧЕСКОГО состояния: если звук сейчас заблокирован политикой
+    // (muted при SOUND_ON=true), первый же клик должен ВКЛЮЧИТЬ звук, а не «выключить» его.
+    SOUND_ON = v ? v.muted : !SOUND_ON;
+    try { localStorage.setItem('y2kv_sound', SOUND_ON ? '1' : '0'); } catch (err) {}
+    if (v) {
+      v.muted = !SOUND_ON;
+      if (v.paused && !v._userPaused) v.play().catch(function() {});
+    }
+    updateSoundBtns();
+  }
+
+  function makeMuteBtn(box, video) {
+    var b = document.createElement('button');
+    b.className = 'mute-btn';
+    b.addEventListener('click', toggleSound);
+    box.appendChild(b);
+    video.addEventListener('volumechange', updateSoundBtns);
+    updateSoundBtns();
+  }
+
+  // Автозапуск «как в шортсах»: пробуем со звуком (если SOUND_ON), при блокировке — muted.
+  // Мутим ТОЛЬКО на NotAllowedError (политика браузера): AbortError от гонки загрузки HLS
+  // не повод глушить звук — его добьют повторные попытки armAutoplay.
+  function tryPlay(video) {
+    if (video._userPaused) return;
+    // Пока открыт оверлей, ничто вне его играть не должно: отложенные таймеры/события
+    // hero-видео (armAutoplay, MANIFEST_PARSED) не имеют права возобновить его под оверлеем.
+    if (overlayOpen() && !document.getElementById('ovMedia').contains(video)) return;
+    video.muted = !SOUND_ON;
+    var p = video.play();
+    if (p && p.catch) p.catch(function(err) {
+      if (!video.muted && err && err.name === 'NotAllowedError') {
+        video.muted = true;
+        updateSoundBtns();
+        video.play().catch(function() {});
+      }
+    });
+  }
+
+  // Надёжный автозапуск: hls.js отдаёт данные в непредсказуемый момент, поэтому
+  // несколько попыток — сразу, по событиям готовности и таймерами-страховками.
+  function armAutoplay(video) {
+    var again = function() { if (video.paused && !video._userPaused && document.body.contains(video)) tryPlay(video); };
+    video.addEventListener('loadedmetadata', again);
+    video.addEventListener('canplay', again);
+    setTimeout(again, 350);
+    setTimeout(again, 1200);
+    tryPlay(video);
+  }
+
   // Клик по превью: если hls.js загрузился (или Safari умеет HLS сам) — играем прямо в карточке,
   // иначе фолбэк: ссылка откроется в новой вкладке как раньше.
   function playInline(link) {
@@ -317,6 +401,9 @@
     if (img) video.poster = img.src;
     link.parentNode.replaceChild(video, link);
     document.querySelectorAll('.media video').forEach(function(v2) { if (v2 !== video) v2.pause(); });
+    // И карусель тоже: два звучащих видео одновременно недопустимы.
+    var hv = document.querySelector('#heroMedia video');
+    if (hv) hv.pause();
     if (hlsOk) {
       var hls = new Hls();
       hls.loadSource(src);
@@ -359,14 +446,14 @@
     HERO = vids.concat(phs);
   }
 
-  // Крупный ▶ по центру, когда видео стоит на паузе (остановлено пользователем
-  // или автозапуск заблокирован браузером) — понятно, что оно не играет.
+  // Крупный ▶ по центру — ТОЛЬКО когда видео остановил сам пользователь.
+  // При заминках автозапуска/буферизации бейдж не показываем.
   function attachPauseBadge(container, video) {
     var badge = document.createElement('div');
     badge.className = 'pause-badge';
     badge.textContent = '▶';
     container.appendChild(badge);
-    function upd() { badge.style.display = video.paused ? 'flex' : 'none'; }
+    function upd() { badge.style.display = (video.paused && video._userPaused) ? 'flex' : 'none'; }
     video.addEventListener('pause', upd);
     video.addEventListener('play', upd);
     video.addEventListener('playing', upd);
@@ -388,16 +475,19 @@
       if (poster) video.poster = poster;
       box.appendChild(video);
       attachPauseBadge(box, video);
+      makeMuteBtn(box, video);
       var hlsOk = (typeof Hls !== 'undefined') && Hls.isSupported();
       if (hlsOk) {
         heroHls = new Hls();
         heroHls.loadSource(r.video);
         heroHls.attachMedia(video);
-        if (autoplay) heroHls.on(Hls.Events.MANIFEST_PARSED, function() { video.play().catch(function() {}); });
-        if (autoplay) video.addEventListener('canplay', function() { if (video.paused && !video._userPaused) video.play().catch(function() {}); });
+        if (autoplay) {
+          heroHls.on(Hls.Events.MANIFEST_PARSED, function() { tryPlay(video); });
+          armAutoplay(video);
+        }
       } else if (canNativeHls) {
         video.src = r.video;
-        if (autoplay) video.play();
+        if (autoplay) armAutoplay(video);
       }
     } else if (r.photos && r.photos.length) {
       var img = document.createElement('img');
@@ -437,16 +527,17 @@
       if (poster) video.poster = poster;
       box.appendChild(video);
       attachPauseBadge(box, video);
+      makeMuteBtn(box, video);
       var hlsOk = (typeof Hls !== 'undefined') && Hls.isSupported();
       if (hlsOk) {
         ovHls = new Hls();
         ovHls.loadSource(r.video);
         ovHls.attachMedia(video);
-        ovHls.on(Hls.Events.MANIFEST_PARSED, function() { video.play().catch(function() {}); });
-        video.addEventListener('canplay', function() { if (video.paused && !video._userPaused) video.play().catch(function() {}); });
+        ovHls.on(Hls.Events.MANIFEST_PARSED, function() { tryPlay(video); });
+        armAutoplay(video);
       } else if (canNativeHls) {
         video.src = r.video;
-        video.play();
+        armAutoplay(video);
       }
       video.addEventListener('click', function() {
         if (video.paused) { video._userPaused = false; video.play().catch(function() {}); }
@@ -493,6 +584,9 @@
     document.getElementById('ovMedia').innerHTML = '';
     document.getElementById('overlay').classList.remove('open');
     document.body.style.overflow = '';
+    // Пауза hero была «от оверлея», не ручная — автовоспроизведение продолжается.
+    var hv = document.querySelector('#heroMedia video');
+    if (hv) tryPlay(hv);
   }
 
   function ovShift(d) {
@@ -546,12 +640,19 @@
       touchX = null;
     }, { passive: true });
     if ('IntersectionObserver' in window) {
+      // Постоянный наблюдатель: старт при первом появлении, дальше — пауза за экраном
+      // (unmuted-видео не должно звучать из-за пределов вьюпорта) и возобновление при возврате.
       var io = new IntersectionObserver(function(entries) {
         entries.forEach(function(entry) {
-          if (entry.isIntersecting && !heroStarted) {
-            heroStarted = true;
-            renderHero(true);
-            io.disconnect();
+          var hv = document.querySelector('#heroMedia video');
+          if (entry.isIntersecting) {
+            if (!heroStarted) { heroStarted = true; renderHero(true); return; }
+            if (hv && hv.paused && !hv._userPaused && !overlayOpen()) {
+              document.querySelectorAll('.media video').forEach(function(v2) { v2.pause(); });
+              tryPlay(hv);
+            }
+          } else if (hv && !hv.paused && !overlayOpen()) {
+            hv.pause();
           }
         });
       }, { threshold: 0.4 });
