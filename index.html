@@ -64,6 +64,11 @@
   .prod-chip.active img { border-color: #19191A; }
   .expand-btn { position: absolute; right: 10px; bottom: 10px; z-index: 3; width: 38px; height: 38px; border-radius: 50%; background: rgba(0,0,0,0.45); color: #fff; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; }
   .expand-btn:hover { background: rgba(0,0,0,0.7); }
+  .hero-like { position: absolute; right: 10px; bottom: 56px; z-index: 3; width: 38px; border: none; border-radius: 19px; background: rgba(0,0,0,0.45); color: #fff; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 7px 0 5px; font-size: 16px; line-height: 1; }
+  .hero-like:hover { background: rgba(0,0,0,0.7); }
+  .hero-like .cnt { font-size: 10px; margin-top: 3px; }
+  .hero-like .hrt { transition: transform 0.15s ease; }
+  .hero-like:active .hrt { transform: scale(1.3); }
   .prod-chip .cap { font-size: 10px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   header p {
     margin: 0;
@@ -507,6 +512,22 @@
       openOverlay(heroIdx);
     });
     box.appendChild(exp);
+    var lk = document.createElement('button');
+    lk.className = 'hero-like';
+    var likedKey = 'y2kv_liked_' + r.feedbackId;
+    function likeHtml() {
+      return '<span class="hrt">' + (localStorage.getItem(likedKey) === '1' ? '❤️' : '🤍') + '</span><span class="cnt">' + (r.likes || 0) + '</span>';
+    }
+    lk.innerHTML = likeHtml();
+    lk.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (localStorage.getItem(likedKey) === '1') return;
+      localStorage.setItem(likedKey, '1');
+      r.likes = (r.likes || 0) + 1;
+      lk.innerHTML = likeHtml();
+      apiCall('like', r.feedbackId, clientId()).then(function(res) { if (res && res.ok && typeof res.likes === 'number') { r.likes = res.likes; lk.querySelector('.cnt').textContent = res.likes; } });
+    });
+    box.appendChild(lk);
   }
 
   // Шортс-режим: тап по карусели раскрывает видео на весь экран со звуком,
