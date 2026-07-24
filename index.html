@@ -46,9 +46,7 @@
   header h1 {
     margin: 0;
     font-size: 18px;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    font-weight: 600;
+    font-weight: 400;
   }
   .prod-strip {
     background: #fff;
@@ -987,6 +985,11 @@
       REVIEWS = data;
       FILTERED = REVIEWS;
       render();
+      // Диплинк с карточки товара: ?art=ipant0016 сразу фильтрует отзывы по этому артикулу.
+      try {
+        var art = new URLSearchParams(location.search).get('art');
+        if (art && REVIEWS.some(function(r) { return r.articul === art; })) setArtFilter(art);
+      } catch (e) {}
     })
     .catch(function() {
       var el = document.getElementById('empty');
