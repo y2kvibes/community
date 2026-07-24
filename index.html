@@ -84,7 +84,8 @@
   .hero-side { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; min-width: 64px; }
   .hero-media { position: relative; width: min(340px, 86vw); aspect-ratio: 9 / 16; cursor: pointer; background: #f0edf1; border-radius: 18px; overflow: hidden; box-shadow: 0 10px 30px rgba(60,50,65,0.18); }
   .hero-media video, .hero-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .hero-caption { position: absolute; top: 0; left: 0; right: 0; padding: 10px 14px 20px; color: #fff; font-size: 13px; text-align: left; background: linear-gradient(rgba(0,0,0,0.5), transparent); pointer-events: none; }
+  .hero-caption { position: absolute; top: 0; left: 0; right: 0; padding: 10px 14px 20px; color: #fff; font-size: 13px; text-align: left; background: linear-gradient(rgba(0,0,0,0.5), transparent); pointer-events: none; display: flex; justify-content: space-between; gap: 10px; }
+  .hero-caption .cap-size { white-space: nowrap; opacity: 0.9; }
   .hero-arrow { width: 46px; height: 46px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.4); background: transparent; color: #fff; font-size: 16px; cursor: pointer; opacity: 0.3; transition: opacity 0.25s ease; }
   .hero-band:hover .hero-arrow { opacity: 0.75; }
   .hero-arrow:hover { opacity: 1; }
@@ -163,7 +164,11 @@
     font-size: 12px;
     color: var(--muted);
     margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
   }
+  .meta .meta-size { white-space: nowrap; }
   .footer-row {
     display: flex;
     align-items: center;
@@ -214,7 +219,8 @@
   .overlay-info { position: absolute; left: 16px; right: 88px; bottom: 22px; color: #fff; z-index: 101; text-shadow: 0 1px 4px rgba(0,0,0,0.7); }
   .overlay-info .oi-stars { color: #ffd166; font-size: 13px; margin-bottom: 4px; }
   .overlay-info .oi-text { font-size: 14px; line-height: 1.35; max-height: 5.4em; overflow: hidden; }
-  .overlay-info .oi-name { font-size: 12px; opacity: 0.8; margin-top: 4px; }
+  .overlay-info .oi-name { font-size: 12px; opacity: 0.8; margin-top: 4px; display: flex; justify-content: space-between; gap: 10px; }
+  .overlay-info .oi-name .oi-size { white-space: nowrap; }
   .ov-like { position: absolute; right: 16px; bottom: 22px; z-index: 102; width: 54px; height: 54px; border-radius: 50%; background: rgba(255,255,255,0.15); border: none; color: #fff; font-size: 20px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; }
   .ov-like .cnt { font-size: 11px; }
   @media (max-width: 640px) { .overlay-media video { object-fit: cover; } }
@@ -540,7 +546,8 @@
     }
     var cap = document.createElement('div');
     cap.className = 'hero-caption';
-    cap.textContent = (r.userName || 'Покупатель') + (r.articul ? ' · ' + r.articul : '');
+    cap.innerHTML = '<span>' + escapeHtml((r.userName || 'Покупатель') + (r.articul ? ' · ' + r.articul : '')) + '</span>' +
+      (r.size ? '<span class="cap-size">Размер: ' + escapeHtml(r.size) + '</span>' : '');
     box.appendChild(cap);
     var exp = document.createElement('button');
     exp.className = 'expand-btn';
@@ -612,7 +619,8 @@
     info.className = 'overlay-info';
     var infoHtml = '<div class="oi-stars">' + stars(r.rating) + '</div>';
     if (r.text) infoHtml += '<div class="oi-text">' + escapeHtml(r.text) + '</div>';
-    infoHtml += '<div class="oi-name">' + escapeHtml(r.userName || 'Покупатель') + (r.articul ? ' · ' + escapeHtml(r.articul) : '') + '</div>';
+    infoHtml += '<div class="oi-name"><span>' + escapeHtml(r.userName || 'Покупатель') + (r.articul ? ' · ' + escapeHtml(r.articul) : '') + '</span>' +
+      (r.size ? '<span class="oi-size">Размер: ' + escapeHtml(r.size) + '</span>' : '') + '</div>';
     info.innerHTML = infoHtml;
     box.appendChild(info);
     var likeBtn = document.createElement('button');
@@ -735,7 +743,8 @@
           '<div class="media">' + mediaHtml(r) + '<span class="stars">' + stars(r.rating) + '</span></div>' +
           '<div class="body">' +
             '<p class="text">' + escapeHtml(r.text || [r.pros, r.cons].filter(Boolean).join(' ')) + '</p>' +
-            '<div class="meta">' + escapeHtml(r.userName || 'Покупатель') + (r.articul ? ' · ' + escapeHtml(r.articul) : '') + '</div>' +
+            '<div class="meta"><span>' + escapeHtml(r.userName || 'Покупатель') + (r.articul ? ' · ' + escapeHtml(r.articul) : '') + '</span>' +
+              (r.size ? '<span class="meta-size">Размер: ' + escapeHtml(r.size) + '</span>' : '') + '</div>' +
             '<div class="footer-row">' +
               '<button class="like-btn' + (liked ? ' liked' : '') + '" data-id="' + r.feedbackId + '">' +
                 '<span class="heart">' + (liked ? '❤️' : '🤍') + '</span><span class="like-count">' + (r.likes || 0) + '</span>' +
