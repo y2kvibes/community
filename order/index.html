@@ -75,6 +75,10 @@
     transition:transform .12s;
   }
   .btn:active{transform:scale(.97)}
+  .btn2{
+    background:var(--card); color:var(--green);
+    border:1.5px solid var(--green); box-shadow:none; margin-top:12px;
+  }
   .btn-ghost{
     display:block; background:none; border:none; cursor:pointer;
     color:#8a8a8a; font-family:'Onest',sans-serif; font-size:15px; font-weight:500;
@@ -163,9 +167,10 @@
       <div class="promo-label">Промокод</div>
       <div class="promo-code">Y2K</div>
     </div>
-    <div class="muted">Действует на первый заказ на сайте <a href="https://y2kvibes.ru/" target="_blank" rel="noopener" style="color:#fff">y2kvibes.ru</a></div>
+    <div class="muted">Действует на первый заказ на сайте y2kvibes.ru</div>
     <div class="grow"></div>
     <button class="btn" onclick="copyPromo()">📋 Скопировать промокод</button>
+    <a class="btn btn2" href="https://y2kvibes.ru/" target="_blank" rel="noopener" onclick="track('site')">Перейти на сайт →</a>
     <button class="btn-ghost" onclick="go('main')">← Назад</button>
   </section>
 </div>
