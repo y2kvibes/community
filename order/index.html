@@ -130,7 +130,7 @@
         <span class="ar">→</span>
       </button>
 
-      <a class="mbtn" href="https://t.me/y2kenergy" target="_blank" rel="noopener">
+      <a class="mbtn" href="https://t.me/y2kenergy" target="_blank" rel="noopener" onclick="track('tg')">
         <span class="ic">🎁</span>
         <span class="tx">
           <span class="t1" style="display:block">Следующий образ — за наш счёт</span>
@@ -139,7 +139,7 @@
         <span class="ar">→</span>
       </a>
 
-      <a class="mbtn" href="https://y2kvibes.ru/collections/loved" target="_blank" rel="noopener">
+      <a class="mbtn" href="https://y2kvibes.ru/collections/loved" target="_blank" rel="noopener" onclick="track('new')">
         <span class="ic">🔥</span>
         <span class="tx">
           <span class="t1" style="display:block">Новинки раньше всех</span>
@@ -173,11 +173,34 @@
 <div class="toast" id="toast">Промокод Y2K скопирован ✓</div>
 
 <script>
+  /* Счётчик переходов: события шлём в Apps Script (лист OrderStats той же таблицы, что и отзывы).
+     На localhost не шлём, чтобы не портить статистику при локальной отладке. */
+  var API = 'https://script.google.com/macros/s/AKfycbygaPMqN5QekLr8_pHlYPO_WL7wDhoTsuTDl4GFe04tJdivTSVspeacFPJSvsjBmhzeKg/exec';
+  var cid = '';
+  try {
+    cid = localStorage.getItem('y2kv_order_cid');
+    if (!cid) {
+      cid = 'c' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      localStorage.setItem('y2kv_order_cid', cid);
+    }
+  } catch (e) { cid = 'nocookie'; }
+  function track(ev){
+    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') return;
+    var payload = JSON.stringify({ action: 'order', id: ev, cid: cid });
+    try {
+      if (!(navigator.sendBeacon && navigator.sendBeacon(API, payload))) {
+        fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: payload, keepalive: true });
+      }
+    } catch (e) {}
+  }
+  track('visit');
   function go(id){
+    if (id === 'bonus') track('bonus');
     document.querySelectorAll('.screen').forEach(function(s){ s.classList.toggle('active', s.id===id); });
     window.scrollTo(0,0);
   }
   function copyPromo(){
+    track('copy');
     var done = function(){
       var t = document.getElementById('toast');
       t.classList.add('show');
